@@ -2,7 +2,7 @@
 // Every result is stored on this device and exported as JSON with "Copy results".
 import { CipherSuite, DhkemX25519HkdfSha256, HkdfSha256, Aes256Gcm } from 'https://cdn.jsdelivr.net/npm/@hpke/core@1.9.0/+esm';
 
-const VERSION = 'device-test 1';
+const VERSION = 'device-test 2';
 const $ = (id) => document.getElementById(id);
 const b64u = {
   enc: (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
@@ -36,6 +36,7 @@ const CHECKS = [
   { id: '1', title: 'Ed25519 key that cannot be exported; sign and verify', auto: true },
   { id: '2', title: 'X25519 key that cannot be exported; key agreement', auto: true },
   { id: '3', title: 'Keys survive closing the app, a phone restart and 8 days', auto: true },
+  { id: '3b', title: 'Which key types survive being stored (diagnostic for 3)', auto: true },
   { id: '4', title: "Open a proposal that today's gateway encrypted", auto: true },
   { id: '5', title: 'Signatures: phone ↔ hap-core, both ways', auto: true },
   { id: '6', title: 'Persistent storage granted', auto: true },
@@ -105,12 +106,19 @@ async function c2() {
 async function c3() {
   let keys = await kvGet('keys');
   const now = Date.now();
+  const hadStored = (await kvGet('keys_written_at')) || null;
+  if (hadStored && !(keys && keys.sign && keys.sign.privateKey)) {
+    return ['fail', { stored_at: new Date(hadStored).toISOString(), read_back: keys === null ? 'null' : typeof keys, note: 'keys were written but do not read back' }];
+  }
   const log = (await kvGet('open_log')) || [];
   if (!keys) {
     const sign = await crypto.subtle.generateKey({ name: 'Ed25519' }, false, ['sign', 'verify']);
     const read = await crypto.subtle.generateKey({ name: 'X25519' }, false, ['deriveBits']);
     keys = { sign, read, created_at: now };
     await kvSet('keys', keys);
+    await kvSet('keys_written_at', now);
+    const back = await kvGet('keys');
+    if (!(back && back.sign && back.sign.privateKey)) return ['fail', { read_back_same_session: back === null ? 'null' : typeof back, note: 'keys written but read back empty' }];
   }
   const msg = new TextEncoder().encode('persist ' + now);
   const sig = await crypto.subtle.sign({ name: 'Ed25519' }, keys.sign.privateKey, msg);
@@ -128,6 +136,49 @@ async function c3() {
   if (!(ok1 && ok2)) return ['fail', detail];
   if (days >= 8 && afterRestart && sessions >= 3) return ['pass', detail];
   return ['record', { ...detail, still_needed: [days < 8 && 'open again after 8 days', !afterRestart && 'restart the phone, then open the app', sessions < 3 && 'close and reopen the app'].filter(Boolean) }];
+}
+// Keys for this session: the stored ones if they read back, else fresh ones (so 5 and 17 test
+// their own subject even when storage fails; storage itself is check 3 and 3b).
+let _sessionKeys;
+async function sessionKeys() {
+  if (_sessionKeys) return _sessionKeys;
+  const k = await kvGet('keys');
+  if (k && k.sign && k.sign.privateKey) return (_sessionKeys = k);
+  return (_sessionKeys = { sign: await crypto.subtle.generateKey({ name: 'Ed25519' }, false, ['sign', 'verify']) });
+}
+// 3b: which key types survive a write and read in IndexedDB, in a fresh transaction.
+async function c3b() {
+  const kinds = {
+    ed25519: () => crypto.subtle.generateKey({ name: 'Ed25519' }, false, ['sign', 'verify']),
+    x25519: () => crypto.subtle.generateKey({ name: 'X25519' }, false, ['deriveBits']),
+    ecdsa_p256: () => crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign', 'verify']),
+    ecdh_p256: () => crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']),
+    aes_gcm: () => crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']),
+  };
+  const out = {};
+  for (const [name, gen] of Object.entries(kinds)) {
+    const key = await gen();
+    const priv = key.privateKey || key;
+    const r = { write: null, read_back: null, usable: null };
+    try { await kvSet('diag_' + name, priv); r.write = 'ok'; } catch (e) { r.write = e.name; }
+    try {
+      const back = await kvGet('diag_' + name);
+      r.read_back = back === null ? 'null' : back === undefined ? 'undefined' : (back instanceof CryptoKey ? 'CryptoKey' : typeof back);
+      if (back instanceof CryptoKey) {
+        if (name === 'ed25519') await crypto.subtle.sign({ name: 'Ed25519' }, back, new Uint8Array(8));
+        if (name === 'ecdsa_p256') await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, back, new Uint8Array(8));
+        if (name === 'aes_gcm') await crypto.subtle.encrypt({ name: 'AES-GCM', iv: new Uint8Array(12) }, back, new Uint8Array(8));
+        if (name === 'x25519') { const o = await kinds.x25519(); await crypto.subtle.deriveBits({ name: 'X25519', public: o.publicKey }, back, 256); }
+        if (name === 'ecdh_p256') { const o = await kinds.ecdh_p256(); await crypto.subtle.deriveBits({ name: 'ECDH', public: o.publicKey }, back, 256); }
+        r.usable = true;
+      }
+    } catch (e) { r.usable = e.name; }
+    // wrapped in an object, as check 3 stores them
+    try { await kvSet('diag_obj_' + name, { k: priv }); const b = await kvGet('diag_obj_' + name); r.in_object = b === null ? 'null' : (b && b.k instanceof CryptoKey) ? 'CryptoKey' : JSON.stringify(b); } catch (e) { r.in_object = e.name; }
+    out[name] = r;
+  }
+  const okOkp = out.ed25519.read_back === 'CryptoKey' && out.x25519.read_back === 'CryptoKey' && out.ed25519.usable === true && out.x25519.usable === true;
+  return [okOkp ? 'pass' : 'fail', out];
 }
 async function importFixtureReader() {
   const f = await loadFixtures();
@@ -161,7 +212,7 @@ async function c5() {
   const bytes = h.approvalSigningBytes(f.ed25519.approval);
   const okA = await crypto.subtle.verify({ name: 'Ed25519' }, pub, b64u.dec(f.ed25519.signature), bytes);
   // b) phone signature, verified by hap-core's verifier
-  const keys = await kvGet('keys');
+  const keys = await sessionKeys();
   const rawPub = new Uint8Array(await crypto.subtle.exportKey('raw', keys.sign.publicKey));
   const did = h.encodeDidKey(rawPub);
   const approval = { ...f.ed25519.approval, approver_did: did, nonce: 'phone-' + sessionId, decided_at: Math.floor(Date.now() / 1000) };
@@ -184,7 +235,7 @@ async function c17() {
   const t0 = performance.now();
   for (let i = 0; i < 30; i++) await openFixture(reader);
   const t1 = performance.now();
-  const keys = await kvGet('keys');
+  const keys = await sessionKeys();
   await crypto.subtle.sign({ name: 'Ed25519' }, keys.sign.privateKey, new Uint8Array(64));
   const t2 = performance.now();
   return ['record', { ms_30_opens: Math.round(t1 - t0), ms_1_sign: +(t2 - t1).toFixed(1) }];
@@ -195,9 +246,9 @@ async function c18() {
   try { await h.verifyApproval(f.ed25519.approval, f.ed25519.signature, f.ed25519.did); return ['pass', 'loaded and verified']; }
   catch (e) { return ['fail', String(e.message || e)]; }
 }
-const AUTO = { '1': c1, '2': c2, '3': c3, '4': c4, '5': c5, '6': c6, '17': c17, '18': c18 };
+const AUTO = { '1': c1, '2': c2, '3': c3, '3b': c3b, '4': c4, '5': c5, '6': c6, '17': c17, '18': c18 };
 async function runAuto() {
-  for (const id of ['1', '2', '3', '4', '5', '6', '18', '17']) {
+  for (const id of ['1', '2', '3', '3b', '4', '5', '6', '18', '17']) {
     try { const [s, d] = await AUTO[id](); await setResult(id, s, d); }
     catch (e) { await setResult(id, 'fail', String(e && (e.name + ': ' + e.message) || e)); }
   }
@@ -377,7 +428,12 @@ async function build() {
     if (!confirm('Delete all test data on this phone?')) return;
     const d = await dbp; d.close(); indexedDB.deleteDatabase('device-test'); location.reload();
   };
-  document.addEventListener('visibilitychange', () => { $('blank').style.display = document.hidden ? 'block' : 'none'; });
+  const blank = (on) => { $('blank').style.display = on ? 'block' : 'none'; };
+  document.addEventListener('visibilitychange', () => blank(document.hidden));
+  window.addEventListener('blur', () => blank(true));
+  window.addEventListener('focus', () => blank(false));
+  window.addEventListener('pagehide', () => blank(true));
+  window.addEventListener('pageshow', () => blank(false));
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   linkCheck();
