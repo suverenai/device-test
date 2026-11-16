@@ -2,7 +2,7 @@
 // Every result is stored on this device and exported as JSON with "Copy results".
 import { CipherSuite, DhkemX25519HkdfSha256, HkdfSha256, Aes256Gcm } from 'https://cdn.jsdelivr.net/npm/@hpke/core@1.9.0/+esm';
 
-const VERSION = 'device-test 2';
+const VERSION = 'device-test 3';
 const $ = (id) => document.getElementById(id);
 const b64u = {
   enc: (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
@@ -37,6 +37,7 @@ const CHECKS = [
   { id: '2', title: 'X25519 key that cannot be exported; key agreement', auto: true },
   { id: '3', title: 'Keys survive closing the app, a phone restart and 8 days', auto: true },
   { id: '3b', title: 'Which key types survive being stored (diagnostic for 3)', auto: true },
+  { id: '3c', title: 'Fallback: reading key stored wrapped, survives restart and 8 days', auto: true },
   { id: '4', title: "Open a proposal that today's gateway encrypted", auto: true },
   { id: '5', title: 'Signatures: phone ↔ hap-core, both ways', auto: true },
   { id: '6', title: 'Persistent storage granted', auto: true },
@@ -180,6 +181,45 @@ async function c3b() {
   const okOkp = out.ed25519.read_back === 'CryptoKey' && out.x25519.read_back === 'CryptoKey' && out.ed25519.usable === true && out.x25519.usable === true;
   return [okOkp ? 'pass' : 'fail', out];
 }
+// 3c: fallback for the reading key. The X25519 key is wrapped by a non-extractable AES key
+// (which IndexedDB stores), kept only as ciphertext, and unwrapped as non-extractable for use.
+async function c3c() {
+  const now = Date.now();
+  let st = await kvGet('wrapped_reader');
+  let wk = await kvGet('wrap_key');
+  if (!st || !(wk instanceof CryptoKey)) {
+    wk = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['wrapKey', 'unwrapKey']);
+    const x = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const wrapped = new Uint8Array(await crypto.subtle.wrapKey('pkcs8', x.privateKey, wk, { name: 'AES-GCM', iv }));
+    const pub = new Uint8Array(await crypto.subtle.exportKey('raw', x.publicKey));
+    st = { wrapped: b64u.enc(wrapped), iv: b64u.enc(iv), pub: b64u.enc(pub), created_at: now };
+    await kvSet('wrap_key', wk);
+    await kvSet('wrapped_reader', st);
+    wk = await kvGet('wrap_key');
+    if (!(wk instanceof CryptoKey)) return ['fail', 'AES wrapping key does not read back'];
+  }
+  const priv = await crypto.subtle.unwrapKey('pkcs8', b64u.dec(st.wrapped), wk, { name: 'AES-GCM', iv: b64u.dec(st.iv) }, { name: 'X25519' }, false, ['deriveBits']);
+  const pubKey = await crypto.subtle.importKey('raw', b64u.dec(st.pub), { name: 'X25519' }, true, []);
+  // seal a test CEK to our own public key with today's suite, then open it with the unwrapped key
+  const sender = await suite.createSenderContext({ recipientPublicKey: pubKey });
+  const secret = crypto.getRandomValues(new Uint8Array(32));
+  const ct = await sender.seal(secret);
+  const rc = await suite.createRecipientContext({ recipientKey: { privateKey: priv, publicKey: pubKey }, enc: sender.enc });
+  const opened = new Uint8Array(await rc.open(ct));
+  const ok = opened.every((v, i) => v === secret[i]) && priv.extractable === false;
+  const log = (await kvGet('wrapped_log')) || [];
+  log.push({ at: now, session: sessionId, ok });
+  await kvSet('wrapped_log', log);
+  const restartMarked = (await kvGet('restart_marked_at')) || null;
+  const days = (now - st.created_at) / 86400000;
+  const sessions = new Set(log.filter((l) => l.ok).map((l) => l.session)).size;
+  const afterRestart = restartMarked && log.some((l) => l.ok && l.at > restartMarked);
+  const detail = { created: new Date(st.created_at).toISOString(), days_since: +days.toFixed(2), app_opens_ok: sessions, after_restart_ok: !!afterRestart, unwrapped_extractable: priv.extractable, opened: ok };
+  if (!ok) return ['fail', detail];
+  if (days >= 8 && afterRestart && sessions >= 3) return ['pass', detail];
+  return ['record', { ...detail, still_needed: [days < 8 && 'open again after 8 days', !afterRestart && 'restart the phone, then open the app', sessions < 3 && 'close and reopen the app'].filter(Boolean) }];
+}
 async function importFixtureReader() {
   const f = await loadFixtures();
   const privateKey = await crypto.subtle.importKey('jwk', f.x25519_jwk, { name: 'X25519' }, false, ['deriveBits']);
@@ -246,9 +286,9 @@ async function c18() {
   try { await h.verifyApproval(f.ed25519.approval, f.ed25519.signature, f.ed25519.did); return ['pass', 'loaded and verified']; }
   catch (e) { return ['fail', String(e.message || e)]; }
 }
-const AUTO = { '1': c1, '2': c2, '3': c3, '3b': c3b, '4': c4, '5': c5, '6': c6, '17': c17, '18': c18 };
+const AUTO = { '1': c1, '2': c2, '3': c3, '3b': c3b, '3c': c3c, '4': c4, '5': c5, '6': c6, '17': c17, '18': c18 };
 async function runAuto() {
-  for (const id of ['1', '2', '3', '3b', '4', '5', '6', '18', '17']) {
+  for (const id of ['1', '2', '3', '3b', '3c', '4', '5', '6', '18', '17']) {
     try { const [s, d] = await AUTO[id](); await setResult(id, s, d); }
     catch (e) { await setResult(id, 'fail', String(e && (e.name + ': ' + e.message) || e)); }
   }
@@ -439,5 +479,6 @@ async function build() {
   linkCheck();
   pushStatus();
   if (results['3']) c3().then(([s, d]) => setResult('3', s, d)).catch(() => {});
+  if (results['3c']) c3c().then(([s, d]) => setResult('3c', s, d)).catch((e) => setResult('3c', 'fail', String(e && e.name + ': ' + e.message)));
 }
 build();
