@@ -2,7 +2,7 @@
 // Every result is stored on this device and exported as JSON with "Copy results".
 import { CipherSuite, DhkemX25519HkdfSha256, HkdfSha256, Aes256Gcm } from 'https://cdn.jsdelivr.net/npm/@hpke/core@1.9.0/+esm';
 
-const VERSION = 'device-test 3';
+const VERSION = 'device-test 4';
 const $ = (id) => document.getElementById(id);
 const b64u = {
   enc: (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
@@ -214,7 +214,8 @@ async function c3c() {
   const restartMarked = (await kvGet('restart_marked_at')) || null;
   const days = (now - st.created_at) / 86400000;
   const sessions = new Set(log.filter((l) => l.ok).map((l) => l.session)).size;
-  const afterRestart = restartMarked && log.some((l) => l.ok && l.at > restartMarked);
+  // a restart counts only if it was marked after this key was made
+  const afterRestart = restartMarked && restartMarked > st.created_at && log.some((l) => l.ok && l.at > restartMarked);
   const detail = { created: new Date(st.created_at).toISOString(), days_since: +days.toFixed(2), app_opens_ok: sessions, after_restart_ok: !!afterRestart, unwrapped_extractable: priv.extractable, opened: ok };
   if (!ok) return ['fail', detail];
   if (days >= 8 && afterRestart && sessions >= 3) return ['pass', detail];
