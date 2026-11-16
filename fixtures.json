@@ -1,0 +1,36 @@
+{
+  "note": "Test data only. These keys protect nothing.",
+  "x25519_jwk": {
+    "kty": "OKP",
+    "crv": "X25519",
+    "d": "IMPDI6jwMtrqXNM9FxPo3QH6VobYa-lGgoBLH8eknG0",
+    "x": "9VG1PEIGcb8th5E4AINQx-CKfSspKWM8COLtlaNPdAE"
+  },
+  "hpke": {
+    "intentCiphertext": "pxs_BrMyTp83uY9ureNrNaY8UTYPQIkDgVEnp3HzYJi7HCePB4PKdFiXtG3WaxtgNxeDAd68sNTyOMWsp55-gqlCMSqHEPfgoS9jld3Bx4SI7nTEmlb_f2cgju5TG1ZKuoCxbNFnDaiFmy0e26wVtQ",
+    "ct": "Fov7-UK283AwjiOoQZSGjRIZp5kDOS0giVPTZtCY0dKW2P7Q8MrS_N28030fRS6P",
+    "enc": "_gnvNL0YawJ0LH_ArFDpyWdezPe4SKjZNmWvX5OaeiE",
+    "plaintext": "Test proposal: send the offer for the spring maintenance to Müller GmbH, EUR 4,800."
+  },
+  "ed25519": {
+    "did": "did:key:z6MkoTN4mjq3x1eDsFX38TRTgF2AEnZDwfNw8Frhhz3WnPYj",
+    "public_key": "hb_9VSXNgda52hSoEMeHXCzZkRxF7w6mA04XJTYn4aA",
+    "approval": {
+      "typ": "HAP-approval",
+      "version": "0.8",
+      "approver_did": "did:key:z6MkoTN4mjq3x1eDsFX38TRTgF2AEnZDwfNw8Frhhz3WnPYj",
+      "proposal_id": "prop_test_1",
+      "mandate_id": "mand_test_1",
+      "action": "send_message",
+      "action_type": "send",
+      "decision": "commit",
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "proposal_content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "decided_at": 1794800000,
+      "nonce": "n-test-1"
+    },
+    "signature": "7swxojRsuaYc4kWfu_wK92zN3zlIktn5Hx2d1jaxzsnRsXP9NHrFTEH3-lF4xL9onGGh_ArgoKEqyxssK4bdDw"
+  },
+  "qr_text": "SUVEREN-DEVICE-TEST-QR-1:ABCDEFGHJKMNPQRSTVWXYZ0123456789ABCDEFGHJKMNPQRSTVWXYZ0123456789ABCDEFGHJKMNPQRSTVWXYZ0123456789ABCDEFGHJKMNPQRSTVWXYZ0123456789ABCDEFGHJKMNPQRSTVWXYZ0123456789ABCDEFGHJKMNPQRSTVWXYZ0123456789ABCDEFGHJKMNPQRSTVWXYZ0123456789ABCDEFGHJKMNPQRSTVWXYZ0123456789ABCDEFGHJKMNPQRSTVWXYZ0123456789ABCDEFGHJKMNPQRSTVWXYZ0123456789ABCDEFGHJKMNPQRSTVWXYZ0123456789ABCDEFGHJKMNPQRSTVWXYZ0",
+  "vapid_public_key": "BBeMZ_hj3hK1Qr7ZjUzx3dZjat7iZ06dvkxYdQQu_OOoZNBOsEvj4pHZ5bup1hkSk-4dFeRTZllRYfDXCrgbK08"
+}

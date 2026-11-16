@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Suveren - device test</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Device test">
+<meta name="theme-color" content="#145a64">
+<style>
+  :root { --fg:#1b1f23; --muted:#5b636b; --line:#d9dde1; --bg:#ffffff; --card:#f6f7f8; --ok:#1d7a3a; --bad:#b3261e; --rec:#7a5a00; --acc:#145a64; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#e8eaed; --muted:#a3abb3; --line:#3a4046; --bg:#121416; --card:#1c1f22; --ok:#5cc27c; --bad:#ff8a80; --rec:#e0c060; --acc:#5fb7c4; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px 16px 48px; font: 16px/1.45 -apple-system, system-ui, sans-serif; color:var(--fg); background:var(--bg); }
+  h1 { font-size:1.3rem; margin:0 0 4px; }
+  h2 { font-size:1.05rem; margin:22px 0 8px; }
+  p { margin:6px 0; }
+  .muted { color:var(--muted); font-size:.92rem; }
+  .banner { padding:10px 12px; border-radius:6px; margin:10px 0; background:var(--card); border-left:4px solid var(--rec); }
+  .banner.ok { border-left-color:var(--ok); }
+  .check { border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin:8px 0; background:var(--card); }
+  .check .head { display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+  .check .title { font-weight:600; }
+  .st { font-size:.85rem; font-weight:700; white-space:nowrap; }
+  .st.pass { color:var(--ok); } .st.fail { color:var(--bad); } .st.record { color:var(--rec); } .st.todo { color:var(--muted); }
+  .detail { font-size:.85rem; color:var(--muted); word-break:break-word; margin-top:4px; }
+  button { font:inherit; padding:8px 12px; margin:6px 6px 0 0; border-radius:6px; border:1px solid var(--acc); background:var(--acc); color:#fff; }
+  button.sec { background:transparent; color:var(--acc); }
+  textarea, input { width:100%; font: 13px/1.3 ui-monospace, monospace; padding:8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); }
+  video { width:100%; max-height:320px; background:#000; border-radius:6px; margin-top:8px; }
+  #blank { position:fixed; inset:0; background:var(--bg); display:none; z-index:10; }
+  .print-only { display:none; }
+  @media print { body > *:not(#sheet) { display:none !important; } #sheet { display:block !important; } }
+</style>
+</head>
+<body>
+<div id="blank"></div>
+<h1>Suveren device test</h1>
+<p class="muted">A throwaway test page. It stores test keys on this phone only. Nothing here is real data.</p>
+<div id="mode" class="banner"></div>
+
+<h2>1. Automatic checks</h2>
+<p class="muted">Press once. Runs the key, signature and decryption checks.</p>
+<button id="runAuto">Run automatic checks</button>
+<div id="auto"></div>
+
+<h2>2. Checks that need you</h2>
+<div id="manual"></div>
+
+<h2>3. Results</h2>
+<p class="muted">Press "Copy results" and paste them into the chat on your Mac.</p>
+<button id="copy">Copy results</button>
+<button id="reset" class="sec">Delete all test data</button>
+<textarea id="out" rows="6" readonly></textarea>
+
+<div id="sheet" class="print-only">
+  <h1>Recovery sheet (TEST — not a real code)</h1>
+  <p>SV1-TEST-TEST-TEST-TEST-TEST-TEST-T</p>
+  <p>This sheet checks printing from the installed app. Throw it away.</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
