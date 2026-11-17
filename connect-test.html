@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suveren - connect test</title>
+<style>
+  :root { --fg:#1b1f23; --bg:#fff; --acc:#145a64; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#e8eaed; --bg:#121416; --acc:#5fb7c4; } }
+  body { margin:0; padding:24px 16px; font:16px/1.45 -apple-system, system-ui, sans-serif; color:var(--fg); background:var(--bg); max-width:640px; }
+  button { font:inherit; padding:8px 14px; border-radius:6px; border:1px solid var(--acc); background:var(--acc); color:#fff; }
+</style>
+</head>
+<body>
+<h1>Check 23: from an HTTPS page to the gateway on this computer</h1>
+<p>A throwaway test page. Press "Connect". The browser should open the test gateway on your own computer
+(<code>http://127.0.0.1:8790</code>) and show "Reached the local gateway", with no warning page in between.</p>
+<p>The test gateway must be running on your computer first.</p>
+<button id="go">Connect</button>
+<script>
+document.getElementById('go').onclick = () => {
+  const state = crypto.getRandomValues(new Uint32Array(2)).join('');
+  location.assign('http://127.0.0.1:8790/cb?code=test-code&state=' + state + '&via=pages');
+};
+</script>
+</body>
+</html>
