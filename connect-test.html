@@ -14,13 +14,18 @@
 <body>
 <h1>Check 23: from an HTTPS page to the gateway on this computer</h1>
 <p>A throwaway test page. Press "Connect". The browser should open the test gateway on your own computer
-(<code>http://127.0.0.1:8790</code>) and show "Reached the local gateway", with no warning page in between.</p>
+(<code>http://127.0.0.1:8790</code> or <code>http://localhost:8790</code>) and show "Reached the local gateway", with no warning page in between.</p>
 <p>The test gateway must be running on your computer first.</p>
-<button id="go">Connect</button>
+<button id="go">Connect (127.0.0.1)</button>
+<button id="go2">Connect (localhost)</button>
 <script>
 document.getElementById('go').onclick = () => {
   const state = crypto.getRandomValues(new Uint32Array(2)).join('');
   location.assign('http://127.0.0.1:8790/cb?code=test-code&state=' + state + '&via=pages');
+};
+document.getElementById('go2').onclick = () => {
+  const state = crypto.getRandomValues(new Uint32Array(2)).join('');
+  location.assign('http://localhost:8790/cb?code=test-code&state=' + state + '&via=pages-localhost');
 };
 </script>
 </body>
